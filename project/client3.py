@@ -16,7 +16,7 @@ def register():
 def login():
     email = input("Enter your email: ")
     password = input("Enter your password: ")
-    send_request(f"login {email} {password}")
+    response = send_request(f"login {email} {password}")
 
 def create_event():
     name = input("Enter the event name: ")
@@ -43,15 +43,17 @@ def main():
         if choice == "register":
             register()
         elif choice == "login":
-            response, user_id = login().split(",")
-            print(response)
+            # response, user_id = login()
+            response = login()
+            # print(response)
         elif choice == "create_event":
             create_event()
         elif choice == "book_ticket":
-            if user_id:
-                book_ticket(user_id)
-            else:
-                print("You need to login first.")
+            book_ticket(user_id)
+            # if user_id:
+            #     book_ticket(user_id)
+            # else:
+            #     print("You need to login first.")
         elif choice == "cancel_booking":
             cancel_booking()
         elif choice == "show_events":

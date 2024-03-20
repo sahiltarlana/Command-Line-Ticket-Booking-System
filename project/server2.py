@@ -26,6 +26,7 @@ class TicketBookingSystem:
         cursor.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
         user = cursor.fetchone()
         if user:
+            print(user['id'])
             return "Login successful."
         return "Invalid email or password."
 

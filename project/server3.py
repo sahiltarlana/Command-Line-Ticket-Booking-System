@@ -15,11 +15,11 @@ class TicketBookingSystem:
     def create_tables(self):
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS users
                              (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, email TEXT, password TEXT)''')
-        self.cursor.execute('''CREATE TABLE IF NOT EXISTS events
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS bus
                              (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, date TEXT, available_tickets INTEGER)''')
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS bookings
-                             (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, user_id INTEGER, num_tickets INTEGER,
-                             FOREIGN KEY(event_id) REFERENCES events(id),
+                             (id INTEGER PRIMARY KEY AUTOINCREMENT, bus_id INTEGER, user_id INTEGER, num_tickets INTEGER,
+                             FOREIGN KEY(bus_id) REFERENCES bus(id),
                              FOREIGN KEY(user_id) REFERENCES users(id))''')
 
     def register_user(self, username, email, password):
@@ -37,47 +37,46 @@ class TicketBookingSystem:
             user = self.cursor.fetchone()
             print(user[0])
             if user:
-                return "Login successful." , user[0]
+                return f"Login successful. user id :{user[0]}" , user[0]
         # return "Invalid email or password.", None
 
-    def create_event(self, name, date, available_tickets):
+    def create_bus(self, name, date, available_tickets):
         with self.semaphore:  # Acquire the semaphore before executing the critical section
-            self.cursor.execute("INSERT INTO events (name, date, available_tickets) VALUES (?, ?, ?)", (name, date, available_tickets))
+            self.cursor.execute("INSERT INTO bus (name, date, available_tickets) VALUES (?, ?, ?)", (name, date, available_tickets))
             self.conn.commit()
-        return "Event created successfully."
+        return "bus created successfully."
 
-    def book_ticket(self, event_id, user_id, num_tickets):
+    def book_ticket(self, bus_id, user_id, num_tickets):
         with self.semaphore:  # Acquire the semaphore before executing the critical section
-            self.cursor.execute("SELECT available_tickets FROM events WHERE id=?", (event_id,))
+            self.cursor.execute("SELECT available_tickets FROM bus WHERE id=?", (bus_id,))
             available_tickets = self.cursor.fetchone()['available_tickets']
             if available_tickets >= num_tickets:
-                self.cursor.execute("INSERT INTO bookings (event_id, user_id, num_tickets) VALUES (?, ?, ?)", (event_id, user_id, num_tickets))
-                self.cursor.execute("UPDATE events SET available_tickets=? WHERE id=?", (available_tickets - num_tickets, event_id))
+                self.cursor.execute("INSERT INTO bookings (bus_id, user_id, num_tickets) VALUES (?, ?, ?)", (bus_id, user_id, num_tickets))
+                self.cursor.execute("UPDATE bus SET available_tickets=? WHERE id=?", (available_tickets - num_tickets, bus_id))
                 self.conn.commit()
                 return "Booking successful."
         return "Not enough tickets available."
 
     def cancel_booking(self, booking_id):
         with self.semaphore:  # Acquire the semaphore before executing the critical section
-            self.cursor.execute("SELECT event_id, num_tickets FROM bookings WHERE id=?", (booking_id,))
+            self.cursor.execute("SELECT bus_id, num_tickets FROM bookings WHERE id=?", (booking_id,))
             result = self.cursor.fetchone()
             if result:
-                event_id, num_tickets = result['event_id'], result['num_tickets']
+                bus_id, num_tickets = result['bus_id'], result['num_tickets']
                 self.cursor.execute("DELETE FROM bookings WHERE id=?", (booking_id,))
-                self.cursor.execute("UPDATE events SET available_tickets=available_tickets+? WHERE id=?", (num_tickets, event_id))
+                self.cursor.execute("UPDATE bus SET available_tickets=available_tickets+? WHERE id=?", (num_tickets, bus_id))
                 self.conn.commit()
                 return "Booking canceled successfully."
         return "Invalid booking ID."
 
-    def show_events(self):
+    def show_bus(self):
         with self.semaphore:  # Acquire the semaphore before executing the critical section
-            self.cursor.execute("SELECT name, date, available_tickets FROM events WHERE date >= ?", (str(date.today()),))
-            events = self.cursor.fetchall()
-            event_list = "\n".join([f"{row['name']} ({row['date']}) - {row['available_tickets']} available" for row in events])
-        return event_list or "No upcoming events."
+            self.cursor.execute("SELECT name, date, available_tickets FROM bus WHERE date >= ?", (str(date.today()),))
+            bus = self.cursor.fetchall()
+            bus_list = "\n".join([f"{row['name']} ({row['date']}) - {row['available_tickets']} available" for row in bus])
+        return bus_list or "No upcoming bus."
 
 def handle_client(client_socket, ticket_system):
-    user_id = None
     while True:
         request = client_socket.recv(1024).decode()
         if not request:
@@ -92,22 +91,23 @@ def handle_client(client_socket, ticket_system):
             email = request[1]
             password = request[2]
             response, user_id = ticket_system.login(email, password)
-            print(user_id)
+            # print(user_id)
             # response = ticket_system.login(email, password)
-        elif request[0] == "create_event":
+        elif request[0] == "create_bus":
             name = request[1]
             date = request[2]
             available_tickets = int(request[3])
-            response = ticket_system.create_event(name, date, available_tickets)
+            response = ticket_system.create_bus(name, date, available_tickets)
         elif request[0] == "book_ticket":
-            event_id = int(request[1])
-            num_tickets = int(request[2])
-            response = ticket_system.book_ticket(event_id, user_id, num_tickets)
+            user_id = int(request[1])
+            bus_id = int(request[2])
+            num_tickets = int(request[3])
+            response = ticket_system.book_ticket(bus_id, user_id, num_tickets)
         elif request[0] == "cancel_booking":
             booking_id = int(request[1])
             response = ticket_system.cancel_booking(booking_id)
-        elif request[0] == "show_events":
-            response = ticket_system.show_events()
+        elif request[0] == "show_bus":
+            response = ticket_system.show_bus()
         else:
             response = "Invalid command."
         client_socket.send(response.encode())

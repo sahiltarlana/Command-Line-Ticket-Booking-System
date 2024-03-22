@@ -2,6 +2,8 @@ import socket
 import threading
 import sqlite3
 from datetime import date
+import time
+import random
 
 class TicketBookingSystem:
     def __init__(self, db_name):
@@ -9,6 +11,7 @@ class TicketBookingSystem:
         self.conn = sqlite3.connect(db_name, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
+        self.cursor2 = self.conn.cursor()
         self.create_tables()
         self.semaphore = threading.Semaphore()  # Initialize the semaphore
 
@@ -32,7 +35,7 @@ class TicketBookingSystem:
         return "Registration successful."
 
     def login(self, email, password):
-        # with self.semaphore:  # Acquire the semaphore before executing the critical section
+        with self.semaphore:  # Acquire the semaphore before executing the critical section
             self.cursor.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
             user = self.cursor.fetchone()
             print(user[0])
@@ -47,6 +50,10 @@ class TicketBookingSystem:
         return "bus created successfully."
 
     def book_ticket(self, bus_id, user_id, num_tickets):
+        i = random.randint(1, 10)
+        time.sleep(i)
+        for k in range(i):
+            print(f"{k}")
         with self.semaphore:  # Acquire the semaphore before executing the critical section
             self.cursor.execute("SELECT available_tickets FROM bus WHERE id=?", (bus_id,))
             available_tickets = self.cursor.fetchone()['available_tickets']
@@ -54,7 +61,7 @@ class TicketBookingSystem:
                 self.cursor.execute("INSERT INTO bookings (bus_id, user_id, num_tickets) VALUES (?, ?, ?)", (bus_id, user_id, num_tickets))
                 self.cursor.execute("UPDATE bus SET available_tickets=? WHERE id=?", (available_tickets - num_tickets, bus_id))
                 self.conn.commit()
-                return "Booking successful."
+                return "Booking successful. | Booking ID : " + str(self.cursor.lastrowid)
         return "Not enough tickets available."
 
     def cancel_booking(self, booking_id):
@@ -70,10 +77,15 @@ class TicketBookingSystem:
         return "Invalid booking ID."
 
     def show_bus(self):
-        with self.semaphore:  # Acquire the semaphore before executing the critical section
-            self.cursor.execute("SELECT name, date, available_tickets FROM bus WHERE date >= ?", (str(date.today()),))
-            bus = self.cursor.fetchall()
-            bus_list = "\n".join([f"{row['name']} ({row['date']}) - {row['available_tickets']} available" for row in bus])
+        # self.cursor2.execute("SELECT name, date, available_tickets FROM bus WHERE date >= ?", (str(date.today()),))
+        # bus = self.cursor2.fetchall()
+        # bus_list = "\n".join([f"{row['name']} ({row['date']}) - {row['available_tickets']} available" for row in bus])
+        # return bus_list or "No upcoming bus."
+
+        # with self.semaphore:  # Acquire the semaphore before executing the critical section
+        self.cursor2.execute("SELECT id, name, date, available_tickets FROM bus WHERE date >= ?", (str(date.today()),))
+        bus = self.cursor2.fetchall()
+        bus_list = "\n".join([f"bus_id : {row['id']} \t {row['name']} \t ({row['date']}) \t {row['available_tickets']} available" for row in bus])
         return bus_list or "No upcoming bus."
 
 def handle_client(client_socket, ticket_system):
